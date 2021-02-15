@@ -1,33 +1,59 @@
 interface MediaQuery  {id:string, type:string, feature: string , units: number, callback: Callback, [key: string]: any}
 
-type Callback = ()=> void;
+type Callback = () => void;
+
+
+// type ModuleCallback = (serviceObject:ServiceObject)=> void
+
+type ServiceObject = {
+  queries: Query[],
+  mainBreakPoint: BreakPoint,
+  _mirrorMediaProp: ()=>void ,
+}
+
+
+
+// type Module = {
+//   id: string,
+//   feature: string,
+//   execute: ModuleCallback,
+// }
 
 const defaultBreakPoints: MediaQuery[] = [
   {id:'xs', type:'screen', feature:'max-width', units: 576, callback:  ()=>{
-    document.querySelector('body').style.background = 'yellow';
+    // ! tells compiler author is sure value will not be nullish
+    document.querySelector('body')!.style.background = 'yellow';
     console.log('xs');
   }},
   {id:'sm', type:'screen', feature:'min-width', units: 576, callback:  ()=>{
-    document.querySelector('body').style.background = 'green';
+    const body = document.querySelector('body')
+    if(body) body.style.background = 'green';
     console.log('sm');
   }},
   {id:'md', type:'screen', feature:'min-width', units: 768, callback: ()=>{
-    document.querySelector('body').style.background = 'red';
+    document.querySelector('body')!.style.background = 'red';
     console.log('md');
   }},
   {id:'lg', type:'screen', feature:'min-width', units: 992, callback:  ()=>{
-    document.querySelector('body').style.background = 'orange';
+    document.querySelector('body')!.style.background  = 'orange';
     console.log('lg');
   }},
   {id:'xl', type:'screen', feature:'min-width', units: 1200, callback:  ()=>{
-    document.querySelector('body').style.background = 'blue';
+    document.querySelector('body')!.style.background = 'blue';
     console.log('xl');
   }},
   {id:'xxl', type:'screen', feature:'min-width', units: 1400, callback:  ()=>{
-    document.querySelector('body').style.background = 'violet';
+    document.querySelector('body')!.style.background = 'violet';
     console.log('xxl');
   }},
 ];
+
+
+// define modules
+
+
+// define service Object
+// queries // mainBreakPoint
 
 // Media Features
 const ANY_HOVER = "any-hover";  // Does any available input mechanism allow the user to hover over elements?
@@ -69,39 +95,38 @@ const WIDTH = "width";  // 	The viewport width
 /**
  * @class JsMediaQuery
  */
+
 class JsMediaQuery{
 
 /**
- * @param {MediaQuery} mediaQueries
+ * @protected @property {BreakPoint} _mainBreakPoint 
+ * @private @param {MediaQuery} _mediaQueries
+ * @protected @property {Query} _queries
  * @example {id:'sm', type:'screen', feature:'min-width', units: 576, callback: null},
  */
 
-  private _mainBreakPoint : BreakPoint = null;
+  protected _mainBreakPoint : BreakPoint | null = null;
 
-  private _breakPoints : Query[] 
+  protected _queries: Query[];
+  [key: string]: unknown
 
-  constructor(private _mediaQueries: MediaQuery[] | MediaQuery) {
+  // private _modules: Query[];
+// must be optional to be able to be deleted
+  constructor(private _mediaQueries?: MediaQuery[] | MediaQuery) {
 
-    this._breakPoints = this._buildBreakPoints(_mediaQueries ?? defaultBreakPoints);
+    this._queries = this._buildBreakPoints(_mediaQueries ?? defaultBreakPoints);
 
     this._initialize();
 
   }
 
-  public _buildBreakPoints(mediaQueries: MediaQuery[] | MediaQuery ): Query[]  {
-    const mediaQueries2 = this._insuresArray(mediaQueries);
-    let featuresArray = this._createFeatureArray(mediaQueries2);
-    return featuresArray;
+  public _buildBreakPoints(mediaQueries: MediaQuery[] | MediaQuery ): Query[] {
+    return this._createFeatureArray(this._insuresArray(mediaQueries));
   }
 
-
   private _createFeatureArray(mediaQueries: MediaQuery[]): Query[] {
-    let featureList: string[] = mediaQueries.map(mediaQuery => mediaQuery.feature);
-    return Array.from(new Set(featureList)).map((item: string):Query => {
-      const query = new Query(item);
-      query.assignQueries(mediaQueries);
-      return query;
-    });
+    const featureList: string[] = mediaQueries.map(mediaQuery => mediaQuery.feature);
+    return Array.from(new Set(featureList)).map((item: string):Query => new Query(item, mediaQueries));
   }
 
   private _insuresArray(value: MediaQuery[] | MediaQuery):  MediaQuery[]  {
@@ -112,24 +137,24 @@ class JsMediaQuery{
     }
   }
 
-  private _mirrorMediaProp(prop): void {
-    this[prop.id]= {active: prop.isActive()}; 
+  protected _mirrorMediaProp(prop: BreakPoint): void {
+    this[prop.id] = {active: prop.isActive()}; 
   }
 
-  private get breakPoints(): Query[] {
-      return this._breakPoints;
+  protected get queries(): Query[] {
+      return this._queries;
   }
 
-  private get mainBreakPoint(): BreakPoint {
+  protected set queries(newBreakPoints: Query[] ) {
+      this._queries = newBreakPoints;
+  }
+
+  protected get mainBreakPoint(): BreakPoint | null{
       return this._mainBreakPoint;
   }
 
-  private set mainBreakPoint(newMainBreakPoint) {
+  protected set mainBreakPoint(newMainBreakPoint) {
       this._mainBreakPoint = newMainBreakPoint;
-  }
-
-  private set breakPoints(newBreakPoints: Query[] ) {
-      this._breakPoints = newBreakPoints;
   }
 
   private _deleteMediaQueries():void {
@@ -165,7 +190,7 @@ class JsMediaQuery{
   private _loadListener(): void  {
     this._addResizeListener();
     this._breakPointsLoop();
-  };
+  }
 
   private _unloadListener(): void {
     this._removeLoadListener();
@@ -177,44 +202,46 @@ class JsMediaQuery{
 
     // set active breakPoint
     // -->> OBJECT DESTRUCTURING IN TYPESCRIPT <<-- 
-    this.breakPoints.forEach(({breakPoints}:{breakPoints:BreakPoint[]}): void => {
-      breakPoints.forEach((breakPoint: BreakPoint):void =>{
+    // this.queries.forEach(({breakPoints}:{breakPoints:BreakPoint[]}) => {
+    this.queries.forEach(({breakPoints}:{breakPoints?:BreakPoint[]}):void => {
+        breakPoints?.forEach((breakPoint: BreakPoint):void =>{
         breakPoint.checkMedia();
         this._mirrorMediaProp(breakPoint);
       })
     });
 
-    // sort active breakPoints 
-    this.breakPoints.forEach(({breakPoints}:{breakPoints:BreakPoint[]}): void => {
-      const sortedActiveBreakPoints: BreakPoint[] = breakPoints.filter((breakPoint: BreakPoint):boolean => breakPoint.isActive())
+    // filter active breakPoints 
+    this.queries.forEach(({breakPoints}:{breakPoints:BreakPoint[]}): void => {
+      if(breakPoints){
+        const filteredActiveBreakPoints: BreakPoint[]  = breakPoints.filter((breakPoint: BreakPoint):boolean => breakPoint.isActive())
 
-      // last breakPoint becomes mainBreakPoint 
-      if(sortedActiveBreakPoints.length){
-        const mainBreakPoint = sortedActiveBreakPoints[sortedActiveBreakPoints.length-1];
+        // get last active BreakPoint
+        const mainBreakPoint = filteredActiveBreakPoints.reduce((last:BreakPoint,breakPoint:BreakPoint)=>{return breakPoint.getUnits() > last.getUnits() ? breakPoint : last },filteredActiveBreakPoints[0]);
 
-        // make sure mainBreakPoint is already set // else assign mainBreakPoint and execute it
-        if(!this.mainBreakPoint){
-          this.mainBreakPoint = mainBreakPoint;
-          this.mainBreakPoint.executeCallback();
-        // compare active breakPoint to last mainBreakPoint // if different replace and execute callback
-        }else if(mainBreakPoint.getId() !== this.mainBreakPoint.getId()){
-          this.mainBreakPoint = mainBreakPoint;
-          this.mainBreakPoint.executeCallback();
+          // make sure mainBreakPoint is already set // else assign mainBreakPoint and execute it
+        if (mainBreakPoint) {
+          if(!this.mainBreakPoint){
+            this.mainBreakPoint = mainBreakPoint;
+            this.mainBreakPoint.executeCallback();
+          // compare active breakPoint to last mainBreakPoint // if different replace and execute callback
+          }else if(mainBreakPoint.getId() !== this.mainBreakPoint.getId()){
+            this.mainBreakPoint = mainBreakPoint;
+            this.mainBreakPoint.executeCallback();
+          }
         }
       } 
     });
   }
-
   // utility
 
-  private _addPassiveSupport(): any | boolean {
+  private _addPassiveSupport():AddEventListenerOptions  | boolean {
     return this._supportsPassive() ? {passive:true }: false ;
   }
 
   private _supportsPassive(): boolean {
     let passiveSupported = false;
     try {
-      const options: any = {
+      const options:AddEventListenerOptions = {
         get passive() { // This function will be called when the browser
                         //   attempts to access the passive property.
           passiveSupported = true;
@@ -222,25 +249,28 @@ class JsMediaQuery{
         }
       };
 
-      window.addEventListener("test", null, options);
-      window.removeEventListener("test", null, options);
+      window.addEventListener("abort",()=>{return}, options);
+      window.removeEventListener("abort",()=>{return}, options);
     } catch(err) {
       passiveSupported = false;
     }
     return passiveSupported;
   }
-
-  // public getActiveBreakPoint() {
-  //     for (const [key, bpObj] of Object.entries(this.breakPoints))
-  //         if(bpObj.active) return  key + '';
-  // }
-
 }
 
 
+/**
+ * @class BreakPoint
+ * @private @property {boolean} _active 
+ * @private @readonly @param {string} _id
+ * @private @readonly @param {string} _type
+ * @private @readonly @param {string} _feature
+ * @private @readonly @param {number} _units
+ * @private @readonly @param {Callback} _callback
+ */
 class BreakPoint {
 
-  private _active: boolean = false;
+  private _active  = false;
 
   constructor(
     private readonly _id: string ,
@@ -251,7 +281,7 @@ class BreakPoint {
     ) {
   }
 
-  private get id():string {
+  public get id(): string {
       return this._id;
   }
 
@@ -327,29 +357,74 @@ class BreakPoint {
 }
 
 
+/**
+ * @class BreakPoint
+ * @public @property {MediaQuery | BreakPoint} _queries 
+ * @public @property {BreakPoint} _breakPoints 
+ * @private @param {string} _type
+ * @classdesc 
+ * 
+ */
+
 class Query{
-  public queries: MediaQuery[] | BreakPoint[];
-  public breakPoints: BreakPoint[];
+
+    // public queries?: MediaQuery[] | BreakPoint[];
+    // public breakPoints?: BreakPoint[];
+    private _breakPoints: BreakPoint[];
   constructor(
     private readonly _feature: string,
-    ) {}
+    private  _queries?: MediaQuery[] 
+    ) {
+      this._breakPoints = []
+      this._assignQueries();
+    }
+
   private get feature() {
     return this._feature;
   }
-  public assignQueries (mediaQueries: MediaQuery[]): void  {
-    const breakPoints = []
-        mediaQueries.forEach(({ id, type, feature, units, callback }) => {
-            if (feature === this.feature)
-            breakPoints.push( new BreakPoint(id, type, feature, units, callback));
-        });
-        this.breakPoints = breakPoints;
+
+  private get queries() {
+    return this._queries;
+  }
+
+
+  private set queries(newQuery) {
+    this._queries = newQuery;
+  }
+
+  public get breakPoints() {
+    return this._breakPoints;
+  }
+
+  public set breakPoints(newBreakPoints:BreakPoint[]) {
+    this._breakPoints = newBreakPoints;
+  }
+
+  // public assignQueries (mediaQueries: MediaQuery[]): void  {
+  //   const breakPoints: BreakPoint[] = [];
+  //       mediaQueries.forEach(({ id, type, feature, units, callback }) => {
+  //           if (feature === this.feature)
+  //           breakPoints.push( new BreakPoint(id, type, feature, units, callback));
+  //       });
+  //       this.breakPoints = breakPoints;
+  //       this._deleteQueries();
+  //   }
+
+  private _assignQueries (): void {
+    if(this.queries){
+          this.breakPoints = this.queries.reduce((acc:BreakPoint[],{ id, type, feature, units, callback }:MediaQuery):BreakPoint[]   => {
+            return ( feature === this.feature )? [...acc, new BreakPoint(id, type, feature, units, callback)] : acc;
+        },[]);
         this._deleteQueries();
+      }
     }
+
   private _deleteQueries():void {
     delete this.queries;
   }
 }
 
-const jsMediaQuery =  new JsMediaQuery(null);
+const jsMediaQuery =  new JsMediaQuery();
 
 console.log(jsMediaQuery)
+
